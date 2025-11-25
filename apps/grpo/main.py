@@ -271,9 +271,7 @@ class DatasetActor(ForgeActor):
 
         def gsm8k_transform(sample):
             system_prompt = """You are a helpful AI assistant that solves math problems.
-
 Please show your reasoning inside <思考></思考> tags, then provide your final numerical answer inside <answer></answer> tags.
-
 Example:
 Question: What is 12 + 5?
 <思考>12と5を足します。12 + 5 = 17です。</思考>
