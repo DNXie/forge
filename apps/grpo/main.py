@@ -27,7 +27,7 @@ from forge.actors.replay_buffer import ReplayBuffer
 from forge.actors.trainer import TitanTrainer
 from forge.controller.actor import ForgeActor
 from forge.controller.provisioner import init_provisioner, shutdown
-from forge.data.rewards import LanguageReward, MathReward, ThinkingReward
+from forge.data.rewards import MathReward, ThinkingReward, UniqueLetterReward
 from forge.data_models.completion import Completion
 from forge.observability.metric_actors import get_or_create_metric_logger
 from forge.observability.metrics import record_metric, Reduce
@@ -264,6 +264,7 @@ class DatasetActor(ForgeActor):
 
     path: str = "openai/gsm8k"
     revision: str = "main"
+    config_name: str = "main"
     data_split: str = "train"
     streaming: bool = True
     model: str = "Qwen/Qwen3-1.7B"
@@ -297,10 +298,58 @@ Question: What is 12 + 5?
             formatted_target = target.split("#### ")[1]
             return {"request": formatted_request, "target": formatted_target}
 
-        self._base_dataset = load_dataset(
-            self.path, self.revision, split=self.data_split, streaming=self.streaming
-        )
-        self._base_dataset = self._base_dataset.map(gsm8k_transform)
+        def ultrafeedback_transform(sample):
+            """
+            Minimal transform for UltraFeedback-style datasets.
+            - Wraps the datapoint's prompt into chat format
+            - Leaves target as the model completion if provided
+            - No extra instructions or system prompts
+            """
+            # UltraFeedback-like datasets usually have:
+            #   sample["prompt"]  -> the task
+            #   sample["response"] or sample["chosen"] -> reference answer (optional)
+
+            user_prompt = sample["prompt"]
+
+            as_chat = [
+                {"role": "user", "content": user_prompt},
+            ]
+
+            # Format request with tokenizer's chat template
+            formatted_request = self._tokenizer.apply_chat_template(
+                as_chat,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+
+            # Some UF variants don't have a reference; handle gracefully
+            target = sample.get("response") or sample.get("chosen") or ""
+
+            # Keep target as raw text (no parsing needed)
+            formatted_target = target
+
+            return {
+                "request": formatted_request,
+                "target": formatted_target,
+            }
+
+        if getattr(self, "config_name", None):
+            self._base_dataset = load_dataset(
+                path=self.path,
+                name=self.config_name,  # config/subset
+                split=self.data_split,
+                streaming=self.streaming,
+                revision=self.revision,  # actual HF revision
+            )
+        else:
+            self._base_dataset = load_dataset(
+                path=self.path,
+                split=self.data_split,
+                streaming=self.streaming,
+                revision=self.revision,
+            )
+
+        self._base_dataset = self._base_dataset.map(ultrafeedback_transform)
         self._base_dataset = self._base_dataset.shuffle()
         self._iterator = iter(self._base_dataset)
 
@@ -409,17 +458,7 @@ async def main(cfg: DictConfig):
         ComputeAdvantages.options(**cfg.actors.compute_advantages).as_actor(),
         ReferenceModel.options(**cfg.services.ref_model).as_service(**cfg.ref_model),
         RewardActor.options(**cfg.services.reward_actor).as_service(
-            reward_functions=[
-                MathReward(),
-                ThinkingReward(tag="思考"),  # Use Japanese tag
-                LanguageReward(
-                    target_language="ja",
-                    tag="思考",
-                    match_reward=2.0,
-                    debug=True,
-                    debug_sample_rate=0.1,
-                ),  # Japanese language reward with debug
-            ]
+            reward_functions=[UniqueLetterReward()]
         ),
     )
 
