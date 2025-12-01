@@ -3,7 +3,7 @@
 
 # Global configuration
 group_size: 8
-local_batch_size: 16 # per-device batch size
+local_batch_size: 4 # per-device batch size
 max_req_tokens: 1024
 max_res_tokens: 2048
 model: "Qwen/Qwen3-1.7B"
@@ -59,7 +59,7 @@ trainer:
     local_batch_size: ${local_batch_size}
     seq_len: ${sum:${max_req_tokens},${max_res_tokens}}  # seq_len >= max_req_tokens + max_res_tokens
     max_norm: 1.0
-    steps: 1000000
+    steps: 500
     dtype: bfloat16
     gc_freq: 1
   compile:
