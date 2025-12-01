@@ -222,38 +222,13 @@ class LanguageReward:
 
 
 class UniqueLetterReward:
-    """Reward class that rewards responses with more unique characters.
-
-    This is the single-sample analogue of:
-
-        def reward_num_unique_letters(completions, **kwargs):
-            completion_contents = [completion[0]["content"] for completion in completions]
-            return [float(len(set(content))) for content in completion_contents]
-
-    For one (prompt, response, target) triple, the reward is:
-
-        reward = float(len(set(response)))
-
-    Notes:
-        - We do NOT filter to alphabetic characters; this matches the original
-          dummy reward, which applies `set(content)` directly.
-        - Empty or None responses get `empty_reward` (default: 0.0).
-    """
+    """Reward class that rewards responses with more unique characters."""
 
     def __init__(self, empty_reward: float = 0.0):
         self.empty_reward = empty_reward
 
     def __call__(self, prompt: str, response: str, target: str | None = None) -> float:
-        """Compute unique-letter reward for a single response.
-
-        Args:
-            prompt: Input prompt (ignored, kept for API compatibility).
-            response: Model response string.
-            target: Optional target/label (ignored, kept for API compatibility).
-
-        Returns:
-            Reward proportional to number of unique characters in `response`.
-        """
+        """Compute unique-letter reward for a single response."""
         if not response:
             return self.empty_reward
 
